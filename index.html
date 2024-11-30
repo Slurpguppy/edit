@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Code Editor</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/standalone.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.8.8/parser-html.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
+  
+
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  background: #0c0c0c;
+  margin: 0;
+  padding: 0;
+  display: flex; /* Makes sidebar and editor align side by side */
+  overflow: hidden;
+}
+    h1 {
+      color: #dcdcdc;
+      text-align: center;
+      margin-top: 20px;
+    }
+    #buttons {
+      text-align: center;
+      right: 0px;
+      position: fixed;
+    }
+    #left-buttons {
+      text-align: center;
+      left: 0px;
+      position: fixed;
+    }
+    #run, #clear, #findButton, #paste, #format-button, #uploadButton, #saveButton {
+      background: #0c0c0c;
+      border: none;
+      border-top: none;
+      border-bottom: none;
+      height: 3vh;
+      width: 5vw;
+      cursor: pointer;
+      font-size: 14px;
+      color: #ffffff;
+    }
+    #run:hover {
+      background: #131313;
+    }
+    #clear:hover {
+      background: #131313;
+    }
+    #findButton:hover {
+      background: #131313;
+    }
+    #paste:hover {
+      background: #131313;
+    }
+    .footer {
+      position: fixed;
+      height: 3vh;
+      width: 100%;
+      bottom: 1px;
+      border-top: 1px solid #cccccc40;
+      background: #0c0c0c;
+    }
+    #editor {
+  margin-top: 200px; /* Same width as the sidebar */
+  height: 96vh; /* Full height to match the viewport */
+  width: 100vw; /* Remaining width after sidebar */
+  border: none;
+  background-color: #1e1e1e;
+  transition: margin-left 0.3s, width 0.3s; /* Smooth transition for resizing */
+  border-left: 1px solid #cccccc40;
+  border-top: 1px solid #cccccc40;
+}
+
+    
+
+    #format-button:hover {
+      background-color: #005a9e;
+    }
+    .container {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: 600px;
+        background-color: #79335b;
+        border-radius: 10px;
+    }
+
+    .sidebar {
+        width: 100%; /* Full width */
+        height: 120px; /* Adjust height as needed */
+        background-color: #0c0c0c;
+        color: white;
+        transition: height 0.3s; /* Smooth transition for opening/closing */
+        overflow: hidden;
+        padding: 10px 0;
+        position: fixed; /* Fix the sidebar at the top */
+        top: 0;
+        left: 0;
+        z-index: 1000; /* Ensure it appears above other elements */
+    }
+
+    .sidebar.collapsed {
+        height: 20px; /* Collapsed height */
+    }
+
+    .sidebar .toggle-btn {
+        background-color: transparent;
+        color: white;
+        border: none;
+        font-size: 20px;
+        position: absolute;
+        top: 3px;
+        left: 10px;
+        padding: 10px;
+        cursor: pointer;
+    }
+
+    .sidebar ul.menu {
+        list-style: none;
+        margin: 60px 0 0 0; /* Push menu items below the toggle button */
+        padding: 0;
+    }
+
+    .sidebar ul.menu li {
+        padding: 0;
+        text-align: center;
+    }
+
+    .sidebar ul.menu li a {
+        text-decoration: none;
+        color: white;
+        display: block;
+        padding: 10px 0;
+        transition: background-color 0.3s;
+    }
+
+    .sidebar ul.menu li a:hover,
+    .sidebar ul.menu li a.active {
+        background-color: #202020;
+    }
+
+    /* Adjust content area when sidebar is collapsed */
+    #editor {
+        margin-top: 200px; /* Adjust for the expanded sidebar */
+        transition: margin-top 0.3s;
+    }
+
+    .sidebar.collapsed + #editor {
+        margin-top: 60px; /* Adjust for the collapsed sidebar */
+    }
+
+    .sidebar.collapsed .menu li a span {
+        display: none;
+    }
+
+    /* upload system */
+
+    #fileInput{
+  height: 300px;
+  line-height: 300px;
+  width: 80px;
+  background-color: #cccccc;
+  float: left;
+}
+
+textarea{
+  width: 800px;
+  height: 300px;
+}
+    
+  </style>
+</head>
+<body>
+    <div class="sidebar">
+        <button class="toggle-btn" onclick="toggleSidebar()">⮜</button>
+        <ul class="menu">
+            <li><a href="#"><i class="fa-solid fa-house"></i><span>Home</span></a></li>
+            <li><a href="#"><i class="fa-solid fa-envelope"></i><span>Files</span></a></li>
+           
+        </ul>
+    </div>
+  <div id="editor"></div>
+
+
+  <div class="footer">
+    <div id="buttons">
+      <button id="run">Open in tab</button>
+      <button id="clear">Clear</button>
+      <button id="paste">Paste</button>
+      <button id="findButton">Find</button>
+      <button id="format-button">Format</button>
+      <button id="uploadButton">Upload File</button>
+      <button id="saveButton">Download</button>
+      <input id="fileInput" type="file" accept=".txt" style="display: none;" />
+    </div>
+    <div id="left-buttons">
+      
+    </div>
+  </div>
+  
+  <script>
+    // Load Monaco Editor
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.38.0/min/vs' } });
+    require(['vs/editor/editor.main'], function () {
+      // Create the Monaco Editor instance
+      const editor = monaco.editor.create(document.getElementById('editor'), {
+        value: `function helloWorld() {console.log("Hello, World!");}`,
+        language: 'html',
+        theme: 'vs-dark',
+      });
+  
+      // Add event listeners within the scope of the editor
+      document.getElementById('format-button').addEventListener('click', () => {
+        const unformattedCode = editor.getValue();
+        try {
+          const formattedCode = prettier.format(unformattedCode, {
+            parser: 'html',
+            plugins: prettierPlugins,
+          });
+          editor.setValue(formattedCode);
+        } catch (error) {
+          alert('Formatting failed: ' + error.message);
+        }
+      });
+  
+      // Open editor content in a new tab
+      document.getElementById('run').addEventListener('click', () => {
+        const editorContent = editor.getValue();
+  
+        // Open a new tab
+        const newTab = window.open('', '_blank');
+        if (!newTab) {
+          alert('Pop-up blocked! Please allow pop-ups for this site.');
+          return;
+        }
+  
+        // Write the content to the new tab
+        newTab.document.open();
+        newTab.document.write(editorContent);
+        newTab.document.close();
+      });
+  
+      // Paste content from clipboard into the editor
+      document.getElementById('paste').addEventListener('click', async () => {
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          editor.setValue(clipboardText);
+        } catch (err) {
+          alert('Failed to read clipboard contents: ' + err);
+        }
+      });
+  
+      // Clear the editor content
+      document.getElementById('clear').addEventListener('click', () => {
+        editor.setValue(''); // Clears the editor content
+      });
+    });
+
+    function toggleSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.querySelector('.toggle-btn');
+
+        sidebar.classList.toggle('collapsed');
+
+        // Update the toggle button arrow direction
+        if (sidebar.classList.contains('collapsed')) {
+            toggleBtn.innerHTML = '⮟'; // Down arrow when collapsed
+        } else {
+            toggleBtn.innerHTML = '⮝'; // Up arrow when expanded
+        }
+    }
+
+
+    // upload system
+    
+ // Trigger the file input when the button is clicked
+document.getElementById('uploadButton').addEventListener('click', function() {
+  document.getElementById('fileInput').click();  // Trigger the hidden file input
+});
+
+// Handle file selection and load content into Monaco editor
+document.getElementById('fileInput').addEventListener('change', handleFileSelect, false);
+
+function handleFileSelect(evt) {
+  var files = evt.target.files;
+
+  if (files.length === 0) {
+    return;
+  }
+
+  var reader = new FileReader();
+
+  reader.onload = function(e) {
+    // Set the content of the Monaco Editor
+    const editor = monaco.editor.getModels()[0];  // Get the first Monaco model (editor instance)
+    editor.setValue(e.target.result);  // Set the content of the Monaco Editor
+  };
+
+  reader.readAsText(files[0]);  // Read the first file as text
+}
+
+ // Save editor content as a file
+ document.getElementById('saveButton').addEventListener('click', () => {
+    const editor = monaco.editor.getModels()[0]; // Get the editor instance
+    const editorContent = editor.getValue(); // Get editor content
+
+    // Create a blob with the editor content
+    const blob = new Blob([editorContent], { type: 'text/html' });
+
+    // Create a temporary link element
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'code.html'; // Default file name
+    a.style.display = 'none';
+
+    // Append link to the body, trigger the download, then remove the link
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+  </script>
+  
+</body>
+</html>
